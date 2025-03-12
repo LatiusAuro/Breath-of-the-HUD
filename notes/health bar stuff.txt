@@ -1,0 +1,159 @@
+Psuedocode for Health Bar:
+
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.food.FoodData;
+import net.minecraft.world.item.ItemStack;
+
+public void drawElement(GuiGraphics gg, float zLevel, float partialTicks, int scaledWidth, int scaledHeight) {
+	//Get starting position
+	int posX = this.settings.getPositionValue(Settings.health_position)[0];
+	int posY = this.settings.getPositionValue(Settings.health_position)[1];
+	
+	//Health
+	int health = Mth.ceil(this.mc.player.getHealth());
+	int absorption = Mth.ceil(this.mc.player.getAbsorptionAmount());
+	int healthMax = Mth.ceil(this.mc.player.getMaxHealth());
+	int maxHearts = Mth.ceil(healthMax / (this.settings.getBoolValue(Settings.quarter_hearts) ? 4 : 2));
+	int fullNormalHearts = Mth.floor(health / (this.settings.getBoolValue(Settings.quarter_hearts) ? 4 : 2));
+	int partNormalHearts = health % (this.settings.getBoolValue(Settings.quarter_hearts) ? 4 : 2);
+	int fullAbsorptionHearts = Mth.floor((health + absorption) / (this.settings.getBoolValue(Settings.quarter_hearts) ? 4 : 2));
+	int partAbsorptionHearts = ((health + absorption) % (this.settings.getBoolValue(Settings.quarter_hearts) ? 4 : 2) * (this.settings.getBoolValue(Settings.quarter_hearts) ? 1 : 2));
+	int heartRows = Mth.ceil(maxHearts / this.settings.getValue(Settings.hearts_per_row));
+	
+	//Draw the hearts
+	for (int i = 1; i <= maxHearts, i++ ) {
+		int posXMod = ((i % this.settings.getValue(Settings.hearts_per_row))-1) * 8;
+		int posYMod = (1 - Mth.floor(i / this.settings.getValue(Settings.hearts_per_row))) * 8;
+		drawHeartContainer(posX + posXMod, posY + posYMod); //Draw the container on the bottom layer
+		if (i <= fullNormalHearts) {
+			if (this.mc.player.hasEffect(MobEffects.POISON)) {
+				drawFullHeart(gg, posX + posXMod, posY + posYMod, "POISON");
+			} else if (this.mc.player.hasEffect(MobEffects.WITHER)) {
+				drawFullHeart(gg, posX + posXMod, posY + posYMod, "WITHER");
+			} else if (this.mc.player.hasEffect(MobEffects.WITHER)) { //Need to find how to tell if the player is freezing
+				drawFullHeart(gg, posX + posXMod, posY + posYMod, "FREEZE");
+			} else {
+				drawFullHeart(gg, posX + posXMod, posY + posYMod);
+			}
+		} else if ((i == (fullNormalHearts + 1)) && (partNormalHearts > 0)) {
+			if (i <= fullAbsorptionHearts) {
+				drawFullHeart(gg, posX + posXMod, posY + posYMod, "ABSORB");
+			} else if ((i == (fullAbsorptionHearts + 1)) && (partAbsorptionHearts > 0)) {
+				drawPartHeart(gg, posX + posXMod, posY + posYMod, partAbsorptionHearts, "ABSORB");
+			}
+			if (this.mc.player.hasEffect(MobEffects.POISON)) {
+				drawPartHeart(gg, posX + posXMod, posY + posYMod, partNormalHearts, "POISON");
+			} else if (this.mc.player.hasEffect(MobEffects.WITHER)) {
+				drawPartHeart(gg, posX + posXMod, posY + posYMod, partNormalHearts, "WITHER");
+			} else if (this.mc.player.hasEffect(MobEffects.WITHER)) { //Need to find how to tell if the player is freezing
+				drawPartHeart(gg, posX + posXMod, posY + posYMod, partNormalHearts, "FREEZE");
+			} else {
+				drawPartHeart(gg, posX + posXMod, posY + posYMod, partNormalHearts);
+			}
+		} else if (i <= fullAbsorptionHearts) {
+			drawFullHeart(gg, posX + posXMod, posY + posYMod, "ABSORB");
+		} else if ((i == (fullAbsorptionHearts + 1)) && (partAbsorptionHearts > 0)) {
+			drawPartHeart(gg, posX + posXMod, posY + posYMod, partAbsorptionHearts, "ABSORB");
+		}
+	}
+	
+	//Armor
+	int armorLevel = this.mc.player.getArmorValue();
+	int toughnessLevel = this.mc.player.getToughnessValue();
+	int totalArmorLevels = 1 + Mth.ceil(armorLevel / 2) + Mth.ceil(toughnessLevel / 2);
+	int armorRows = Mth.ceil(totalArmorLevels / this.settings.getValue(Settings.hearts_per_row));
+	
+	//Draw the armor and toughness bars
+	for (int i = 1; i <= totalArmorLevels, i++ ) {
+		int posXMod = (i-1) * 8;
+		int posYMod = heartRows * 8;
+		if (i <= Mth.floor(armorLevel / 2)) {
+			drawFullArmor(gg, posX + posXMod, posY + posYMod);
+		} else if (i == Mth.ceil(armorLevel / 2)) {
+			drawHalfArmor(gg, posX + posXMod, posY + posYMod);
+		} else if (i > (1 + Mth.ceil(armorLevel / 2))) {
+			if (armorRows > 1) {
+				posXMod -= (Mth.ceil(armorLevel / 2) + 1);
+				posYMod += 8;
+			}
+			int j = i - (1 + Mth.ceil(armorLevel / 2));
+			if (j <= Mth.floor(toughnessLevel / 2)) {
+				drawFullToughness(gg, posX + posXMod, posY + posYMod);
+			} else if (j == Mth.ceil(toughnessLevel / 2)) {
+				drawHalfToughness(gg, posX + posXMod, posY + posYMod);
+			}
+		}
+	}
+	
+	//Food
+	FoodData stats = this.mc.player.getFoodData();
+	int stamina = stats.getFoodLevel();
+	int staminaMax = 20;
+	int saturation = stats.getFoodSaturationLevel();
+	int bonusHunger = 0;
+	int bonusSaturation = 0;
+	if (stats.needsFood() && this.settings.getBoolValue(Settings.show_hunger_preview)) {
+		float hungerVal = 0;
+		float saturationVal = 0;
+		if (itemMain != ItemStack.EMPTY && itemMain.getItem().isEdible()) {
+			hungerVal = itemMain.getItem().getFoodProperties(itemMain, null).getNutrition();
+			saturationVal = itemMain.getItem().getFoodProperties(itemMain, null).getSaturation();
+		} else if (itemSec != ItemStack.EMPTY && itemMain.getItem().isEdible()) {
+			hungerVal = itemSec.getItem().getFoodProperties(itemMain, null).getNutrition();
+			saturationVal = itemSec.getItem().getFoodProperties(itemMain, null).getSaturation();
+		}
+		if (value > 0) {
+			bonusHunger = (int) (hungerVal + stamina);
+			bonusSaturation = (int) (saturationVal + saturation);
+			if (bonusHunger > staminaMax)
+				bonusHunger = staminaMax;
+			if (bonusSaturation > staminaMax)
+				bonusSaturation = staminaMax;
+		}
+	}
+	
+	//Display hunger and saturation
+	for (int i = 1; i <= totalArmorLevels, i += 2 ) {
+		int posXMod = (i-1) * 8;
+		int posYMod = (heartRows + armorRows + 1) * 8;
+		drawHungerBase(gg, posX + posXMod, posY + posYMod);
+		if (bonusHunger > stamina){
+			if (i < bonusHunger) {
+				drawFullShank(gg, posX + posXMod, posY + posYMod, "BONUS");
+			} else if (i == bonusHunger) {
+				drawHalfShank(gg, posX + posXMod, posY + posYMod, "BONUS");
+			}
+		}
+		if (i < stamina) {
+			if (this.mc.player.hasEffect(MobEffects.HUNGER)) {
+				drawFullShank(gg, posX + posXMod, posY + posYMod, "HUNGER");
+			} else {
+				drawFullShank(gg, posX + posXMod, posY + posYMod);
+			}
+		} else if (i == stamina) {
+			if (this.mc.player.hasEffect(MobEffects.HUNGER)) {
+				drawHalfShank(gg, posX + posXMod, posY + posYMod, "HUNGER");
+			} else {
+				drawHalfShank(gg, posX + posXMod, posY + posYMod);
+			}
+		}
+		if this.settings.getBoolValue(Settings.show_saturation){
+			if (bonusSaturation > saturation){
+				if (i < bonusSaturation) {
+					drawFullShank(gg, posX + posXMod, posY + posYMod, "SATBONUS");
+				} else if (i == bonusSaturation) {
+					drawHalfShank(gg, posX + posXMod, posY + posYMod, "SATBONUS");
+				}
+			}
+			if (i < saturation) {
+				drawFullShank(gg, posX + posXMod, posY + posYMod, "SATURATE");
+			} else if (i == saturation) {
+				drawHalfShank(gg, posX + posXMod, posY + posYMod, "SATURATE");
+			}
+		}
+	}
+	
+	//Experience
+}
